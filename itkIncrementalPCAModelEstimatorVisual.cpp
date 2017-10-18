@@ -15,6 +15,7 @@
 #include <vtkPolyData.h>
 #include <vtkPolyDataReader.h>
 #include <vtkXMLPolyDataWriter.h>
+#include <vtkPointData.h>
 //VNL
 #include <vnl/vnl_matrix_ref.h>
 //SMILIy
@@ -37,7 +38,7 @@ bool ReadSurfaceFileNames(const char * filename, std::vector<int> &ids, std::vec
 
 int main(int argc, char * argv[])
 {
-	if (argc < 4)
+	if (argc < 6)
 	{
 		std::cerr << "Shape Modelling App" << std::endl;
 		std::cerr << "Assumes meshes in MVB are Polydata." << std::endl;
@@ -46,16 +47,18 @@ int main(int argc, char * argv[])
 		std::cerr << "BatchPCA Size " << std::endl;
 		std::cerr << "Eigenvector Size" << std::endl;
 		std::cerr << "trainingSets Size control" << std::endl;
-		//std::cerr << "weight" << std::endl;
-		//std::cerr << "mode" << std::endl;
+		std::cerr << "mode" << std::endl;
+		std::cerr << "weight" << std::endl;
+		std::cerr << "precision" << std::endl;
 		return EXIT_FAILURE;
 	}
 	std::string inputFileName = argv[1];
 	int batchSize = atoi(argv[2]);
 	int eigenvectorSize = atof(argv[3]);
 	int trainingSetsSizeControl = atoi(argv[4]);
-	//int weight = atoi(argv[5]);
-	//int mode = atoi(argv[6]);
+	int mode = atoi(argv[5]);
+	double weight = atof(argv[6]);
+	double precision = atof(argv[7]);
 
 	std::vector<int> ids;
 	std::vector<std::string> filenames;
@@ -128,9 +131,21 @@ int main(int argc, char * argv[])
 	}
 	//Add to PCA model
 	ipcaModel->setPCABatchSize(batchSize);
+	std::cout << "ipcaModel->Update()" << std::endl;
 	ipcaModel->Update();
 
 	vnl_vector<PrecisionType> eigenValues = ipcaModel->GetEigenValues();
+
+	// write eigenValues to file
+	std::ofstream myfile;
+	myfile.open("C:\\Users\\Alex\\Desktop\\eigenvalue.csv");
+	myfile << "Mode,Value,\n";
+	for (int i = 0; i < eigenValues.size(); i++)
+	{
+		myfile << i + 1 << "," << eigenValues.get(i) << "\n";
+	}
+	myfile.close();
+
 	unsigned int numEigVal = eigenValues.size();
 	std::cout << "Number of returned eign-values: " << numEigVal << std::endl;
 
@@ -142,22 +157,32 @@ int main(int argc, char * argv[])
 
 	/*insert visualisation*/
 	vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
-	int mode = 1;
-	double weight = 3;
+	vtkSmartPointer<vtkPoints> meanpoints = vtkSmartPointer<vtkPoints>::New();
+	//int mode = 1;
+	//double weight = 0.03;
 	vnl_vector<PrecisionType> b(mode, 0);
 	b(mode - 1) = weight; //!< View mode
-	cout << "Generating display for mode " << mode - 1 << endl;
+	cout << "Generating display for mode " << mode <<  ", weight " << weight << endl;
 	vnl_vector<PrecisionType> recon;
 	ipcaModel->GetVectorFromDecomposition(b, recon);
+	vnl_vector<PrecisionType> means;
+	means = ipcaModel->GetMeans(); // repeat the 
+	for (int i = 0; i < numberOfPoints; i++)
+	{
+		PrecisionType x = means(i * 3);
+		PrecisionType y = means((i * 3) + 1);
+		PrecisionType z = means((i * 3) + 2);
+		meanpoints->InsertNextPoint(x, y, z);
+	}
 
 	// from vector to polydata
 	// put into a function to also get the mean shape
 
 	for (int i = 0; i < numberOfPoints; i++)
 	{
-		PrecisionType x = recon(i);
-		PrecisionType y = recon(i + 1);
-		PrecisionType z = recon(i + 2);
+		PrecisionType x = recon(i * 3);
+		PrecisionType y = recon((i * 3) + 1);
+		PrecisionType z = recon((i * 3) + 2);
 		points->InsertNextPoint(x, y, z);
 	}
 
@@ -165,70 +190,69 @@ int main(int argc, char * argv[])
 	reader->SetFileName(filenames[0].c_str());
 	reader->Update();
 
+	vtkSmartPointer<vtkPolyData> meanpolyData = reader->GetOutput();
+	meanpolyData->SetPoints(meanpoints);
+	vtkSmartPointer<vtkPolyData> meanShape = vtkSmartPointer<vtkPolyData>::New();
+	meanShape->DeepCopy(meanpolyData); //use GetVectorFromDecomposition()
+
 	vtkSmartPointer<vtkPolyData> polyData = reader->GetOutput();
 	polyData->SetPoints(points);
 	vtkSmartPointer<vtkPolyData> varShape = vtkSmartPointer<vtkPolyData>::New();
 	varShape->DeepCopy(polyData); //use GetVectorFromDecomposition()
-
-								  //rest goes here
+	
 	vtkSmartPointer<vtkFloatArray> varScalars = vtkSmartPointer<vtkFloatArray>::New();
 	varScalars->SetName("Variation");
 	vtkSmartPointer<vtkFloatArray> varVectors = vtkSmartPointer<vtkFloatArray>::New();
 	varVectors->SetNumberOfComponents(3);
 	vtkSmartPointer<vtkFloatArray> varShapeVectors = vtkSmartPointer<vtkFloatArray>::New();
 	varShapeVectors->SetNumberOfComponents(3);
-	vtkSmartPointer<vtkFloatArray> varTensors = vtkSmartPointer<vtkFloatArray>::New();
-	varTensors->SetNumberOfComponents(9);
+	
+	//std::cout << "Computing Variation" << std::endl;
+	for (int i = 0; i < meanShape->GetNumberOfPoints(); i++)
+	{
+		double* meanPoint = meanShape->GetPoint(i); // meanshape is m_Means
+		double* varPoint = varShape->GetPoint(i);
 
-	//printInfo("Computing Variation");
-	//for (int i = 0; i < meanShape->GetNumberOfPoints(); i++)
-	//{
-	//	vtkFloatingPointType* meanPoint = meanShape->GetPoint(i);
-	//	vtkFloatingPointType* varPoint = varShape->GetPoint(i);
+		double xVal = varPoint[0] - meanPoint[0];
+		double yVal = varPoint[1] - meanPoint[1];
+		double zVal = varPoint[2] - meanPoint[2];
 
-	//	vtkFloatingPointType xVal = varPoint[0] - meanPoint[0];
-	//	vtkFloatingPointType yVal = varPoint[1] - meanPoint[1];
-	//	vtkFloatingPointType zVal = varPoint[2] - meanPoint[2];
+		double var;
+		var = xVal*xVal + yVal*yVal + zVal*zVal;
+		
+		// std::cout << var << std::endl;
+		varVectors->InsertNextTuple3(xVal, yVal, zVal);
+		varShapeVectors->InsertNextTuple3(-xVal, -yVal, -zVal);
+		varScalars->InsertNextValue(var);
+	}
 
-	//	float normalPoint[3];
-	//	normArray->GetTupleValue(i, normalPoint);
-	//	vtkFloatingPointType var;
-	//	if (flgNormal)
-	//	{
-	//		var = xVal*normalPoint[0] + yVal*normalPoint[1] + zVal*normalPoint[2];
-	//		var = var*var;
-	//	}
-	//	else
-	//	{
-	//		var = xVal*xVal + yVal*yVal + zVal*zVal;
-	//	}
-	//	// std::cout << var << std::endl;
-	//	varVectors->InsertNextTuple3(xVal, yVal, zVal);
-	//	varShapeVectors->InsertNextTuple3(-xVal, -yVal, -zVal);
-	//	varScalars->InsertNextValue(var);
-	//}
+	vtkFloatingPointType maxScalar = std::numeric_limits<vtkFloatingPointType>::min();
+	for (int i = 0; i < varScalars->GetNumberOfTuples(); i++)
+	{
+		if (varScalars->GetValue(i) > maxScalar)
+			maxScalar = varScalars->GetValue(i);
+	}
 
-	//vtkFloatingPointType maxScalar = std::numeric_limits<vtkFloatingPointType>::min();
-	//for (int i = 0; i < varScalars->GetNumberOfTuples(); i++)
-	//{
-	//	if (varScalars->GetValue(i) > maxScalar)
-	//		maxScalar = varScalars->GetValue(i);
-	//}
-
-	//for (int i = 0; i < varScalars->GetNumberOfTuples(); i++)
-	//{
-	//	vtkFloatingPointType var = varScalars->GetValue(i);
-	//	varScalars->SetValue(i, var / maxScalar);
-	//}
-	//// save to file
-	//meanShape->GetPointData()->SetVectors(varVectors);
-	//varShape->GetPointData()->SetVectors(varShapeVectors);
-	//meanShape->GetPointData()->SetScalars(varScalars);
+	for (int i = 0; i < varScalars->GetNumberOfTuples(); i++)
+	{
+		vtkFloatingPointType var = varScalars->GetValue(i);
+		varScalars->SetValue(i, var / maxScalar);
+	}
+	// save to file
+	// try vtk 6/7
+	meanShape->GetPointData()->SetVectors(varVectors);
+	varShape->GetPointData()->SetVectors(varShapeVectors);
+	meanShape->GetPointData()->SetScalars(varScalars);
 								  // Write the file
 	vtkSmartPointer<vtkXMLPolyDataWriter> writer = vtkSmartPointer<vtkXMLPolyDataWriter>::New();
-	writer->SetFileName("test.vtp");
-	writer->SetInputData(polyData);
+	writer->SetFileName("meanShape.vtp");
+	writer->SetInputData(meanShape);
 	writer->Write();
+	vtkSmartPointer<vtkXMLPolyDataWriter> writer2 = vtkSmartPointer<vtkXMLPolyDataWriter>::New();
+	writer2->SetFileName("varShape.vtp");
+	writer2->SetInputData(varShape);
+	writer2->Write();
+	
 	std::cout << "file write complete." << std::endl;
 }
 
@@ -276,4 +300,4 @@ bool ReadSurfaceFileNames(const char * filename, std::vector<int> &ids, std::vec
 	return EXIT_SUCCESS;
 }
 
-//C:\Users\Alex\Documents\shape_visual\build\bin\Release\itkIncrementalPCAModelEstimatorVisual.exe C:\Users\Alex\Documents\aligned\aligned.mvb 10 20 11
+//C:\Users\Alex\Documents\shape_visual\build\bin\Release\itkIncrementalPCAModelEstimatorVisual.exe C:\Users\Alex\Documents\aligned100\aligned.mvb 10 0 100 1 0.03

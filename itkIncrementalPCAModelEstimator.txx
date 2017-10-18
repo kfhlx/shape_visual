@@ -472,29 +472,36 @@ namespace itk
 			// 1. Project new surface from D to current eigenspace, a = UT(x-mean)
 			UT = m_EigenVectors.transpose();
 			x.set_size(m_NumberOfMeasures, 1); // current shape set size 69138 x 1
+			x.fill(0);
 			x.set_column(0, m_TrainingSets[i]); // set first column from training set
 			tmpSet.set_size(m_NumberOfMeasures, 1); // 69138 x 1
+			tmpSet.fill(0);
 			tmpSet.set_column(0, (m_TrainingSets[i] - m_Means)); // remove mean from current shape
 			a.set_size(i, 1); // i x 1
+			a.fill(0);
 			a.set_columns(0, UT * tmpSet); // project to eigenspace
 
 			// 2. Reconstruct new image, y = U a + mean
 			mean.set_size(m_Means.size(), 1);
+			mean.fill(0);
 			mean.set_column(0, m_Means);
-			y = m_EigenVectors*a + mean; // error
+			y = m_EigenVectors * a + mean; // error
 
 			// 3. Compute the residual vector, r is orthogonal to U
 			r = x - y;
-
-			//std::ofstream myfile("C:\\r.csv", std::ios_base::app | std::ios_base::out);
-			//myfile << r.get_column(0) << "\n";
-			//myfile.close();
 
 			// 4. Append r as a  new basis vector
 			Ud.set_size(m_NumberOfMeasures, m_EigenVectors.cols() + 1);
 			Ud.fill(0);
 			Ud.set_columns(0, m_EigenVectors);
 			//rn = r.normalize_columns();
+			// something need to be normalise
+			double r_mag = 0;
+			for (unsigned int j = 0; j < r.size(); j++)
+			{
+				r_mag += (r.get(j, 0)*r.get(j, 0));
+			}
+			r_mag = sqrt(r_mag);
 			Ud.set_columns(Ud.cols() - 1, r);
 
 			// 5. New coefficients
@@ -505,17 +512,27 @@ namespace itk
 			// add a
 			Ad.update(a, 0, Ad.cols() - 1);
 			// add ||r||
+			// #1 method: r_mag
 			//double r_mag = 0;
 			//for (unsigned int j = 0; j < r.size(); j++)
 			//{
 			//	r_mag += (r.get(j, 0)*r.get(j, 0));
 			//}
 			//r_mag = sqrt(r_mag);
-			// #1 r_mag
-			//Ad.put(Ad.rows() - 1, Ad.cols() - 1, r_mag);
-			// #2 r.array_two_norm()
+			Ad.put(Ad.rows() - 1, Ad.cols() - 1, r_mag);
+			
+			// #2 method: r.array_two_norm()
 			// r.array_two_norm() always 1
-			Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.array_two_norm());
+			//Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.array_two_norm());
+
+			// #3 method: fro_norm
+			//Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.fro_norm());
+
+			// #4 method: rms
+			//Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.rms());
+
+			// #5 method: frobenius_norm
+			//Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.frobenius_norm());
 
 			// 6. Perform PCA on Ad
 			// udd is mean of Ad, one column, Ad rows
@@ -552,7 +569,10 @@ namespace itk
 
 			// 10. New eigenvalues
 			m_EigenValues = lamdadd;
+
+			// compare with precision
 		}
+
 		// trim eigenvectorSize if needed
 		// trim 
 	}
@@ -581,3 +601,9 @@ namespace itk
 } // namespace itk
 
 #endif
+
+/* 100 smilx 100 itk batch 100 itk incremental
+vtk is different because decomposition
+
+smilx generate vectors
+*/

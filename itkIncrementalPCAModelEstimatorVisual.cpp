@@ -92,7 +92,7 @@ int main(int argc, char * argv[])
 	{
 		ReaderType::Pointer  polyDataReader = ReaderType::New();
 		polyDataReader->SetFileName(filenames[i].c_str());
-		//std::cout << "Adding ID " << count << " " << filenames[i].c_str() << std::endl;
+		std::cout << "Adding ID " << count << " " << filenames[i].c_str() << std::endl;
 		count++;
 		try
 		{

@@ -31,7 +31,7 @@ typedef itk::Image<InputPixelType, Dimension> InputImageType;
 typedef itk::Image<OutputPixelType, Dimension> OutputImageType;
 typedef InputImageType::SizeType SizeType;
 typedef itk::IncrementalPCAModelEstimator<PrecisionType> IncrementalPCAModelEstimatorType;
-typedef vnl_matrix<PrecisionType>  MatrixType;
+typedef vnl_matrix<PrecisionType> MatrixType;
 typedef vnl_vector<PrecisionType> VectorType;
 
 bool ReadSurfaceFileNames(const char * filename, std::vector<int> &ids, std::vector<std::string> &filenames);
@@ -44,8 +44,8 @@ int main(int argc, char * argv[])
 		std::cerr << "Assumes meshes in MVB are Polydata." << std::endl;
 		std::cerr << "Usage:" << std::endl;
 		std::cerr << "mvb file" << std::endl;
-		std::cerr << "BatchPCA Size " << std::endl;
-		std::cerr << "Eigenvector Size" << std::endl;
+		std::cerr << "BatchPCA Size" << std::endl;
+		std::cerr << "Eigenvalue Size" << std::endl;
 		std::cerr << "trainingSets Size control" << std::endl;
 		std::cerr << "mode" << std::endl;
 		std::cerr << "weight" << std::endl;
@@ -54,7 +54,7 @@ int main(int argc, char * argv[])
 	}
 	std::string inputFileName = argv[1];
 	int batchSize = atoi(argv[2]);
-	int eigenvectorSize = atof(argv[3]);
+	int eigenvalueSize = atof(argv[3]);
 	int trainingSetsSizeControl = atoi(argv[4]);
 	int mode = atoi(argv[5]);
 	double weight = atof(argv[6]);
@@ -85,16 +85,14 @@ int main(int argc, char * argv[])
 	typedef itk::Mesh<PrecisionType, 3> MeshType;
 	typedef itk::VTKPolyDataReader< MeshType > ReaderType;
 	typedef ReaderType::PointType PointType;
-	typedef vnl_vector<PrecisionType> VectorType;
-	typedef vnl_matrix<PrecisionType> MatrixType;
 
 	int count = 1;
-	unsigned int numberOfPoints;
+	int numberOfPoints;
 	for (int i = 0; i < trainingSetsSizeControl; i++)
 	{
 		ReaderType::Pointer  polyDataReader = ReaderType::New();
 		polyDataReader->SetFileName(filenames[i].c_str());
-		std::cout << "Adding ID " << count << " " << filenames[i].c_str() << std::endl;
+		//std::cout << "Adding ID " << count << " " << filenames[i].c_str() << std::endl;
 		count++;
 		try
 		{
@@ -115,7 +113,7 @@ int main(int argc, char * argv[])
 
 		// Retrieve points
 		VectorType pointsVector(3 * numberOfPoints); //for each x, y, z values
-		for (unsigned int i = 0; i < numberOfPoints; i++)
+		for (int i = 0; i < numberOfPoints; i++)
 		{
 			PointType pp;
 			bool pointExists = mesh->GetPoint(i, &pp);
@@ -131,10 +129,11 @@ int main(int argc, char * argv[])
 	}
 	//Add to PCA model
 	ipcaModel->setPCABatchSize(batchSize);
-	std::cout << "ipcaModel->Update()" << std::endl;
+	ipcaModel->setPrecision(precision);
+	ipcaModel->seteigenvalueSize(eigenvalueSize);
 	ipcaModel->Update();
 
-	vnl_vector<PrecisionType> eigenValues = ipcaModel->GetEigenValues();
+	VectorType eigenValues = ipcaModel->GetEigenValues();
 
 	// write eigenValues to file
 	std::ofstream myfile;
@@ -155,17 +154,16 @@ int main(int argc, char * argv[])
 	}
 	std::cout << std::endl;
 
-	/*insert visualisation*/
+	/*visualisation*/
 	vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
 	vtkSmartPointer<vtkPoints> meanpoints = vtkSmartPointer<vtkPoints>::New();
-	//int mode = 1;
-	//double weight = 0.03;
-	vnl_vector<PrecisionType> b(mode, 0);
+
+	VectorType b(mode, 0);
 	b(mode - 1) = weight; //!< View mode
 	cout << "Generating display for mode " << mode <<  ", weight " << weight << endl;
-	vnl_vector<PrecisionType> recon;
+	VectorType recon;
 	ipcaModel->GetVectorFromDecomposition(b, recon);
-	vnl_vector<PrecisionType> means;
+	VectorType means;
 	means = ipcaModel->GetMeans(); // repeat the 
 	for (int i = 0; i < numberOfPoints; i++)
 	{
@@ -176,7 +174,6 @@ int main(int argc, char * argv[])
 	}
 
 	// from vector to polydata
-	// put into a function to also get the mean shape
 
 	for (int i = 0; i < numberOfPoints; i++)
 	{
@@ -243,13 +240,13 @@ int main(int argc, char * argv[])
 	meanShape->GetPointData()->SetVectors(varVectors);
 	varShape->GetPointData()->SetVectors(varShapeVectors);
 	meanShape->GetPointData()->SetScalars(varScalars);
-								  // Write the file
+	// Write the file
 	vtkSmartPointer<vtkXMLPolyDataWriter> writer = vtkSmartPointer<vtkXMLPolyDataWriter>::New();
-	writer->SetFileName("meanShape.vtp");
+	writer->SetFileName("C:\\Users\\Alex\\Desktop\\meanShape.vtp");
 	writer->SetInputData(meanShape);
 	writer->Write();
 	vtkSmartPointer<vtkXMLPolyDataWriter> writer2 = vtkSmartPointer<vtkXMLPolyDataWriter>::New();
-	writer2->SetFileName("varShape.vtp");
+	writer2->SetFileName("C:\\Users\\Alex\\Desktop\\varShape.vtp");
 	writer2->SetInputData(varShape);
 	writer2->Write();
 	
@@ -300,4 +297,4 @@ bool ReadSurfaceFileNames(const char * filename, std::vector<int> &ids, std::vec
 	return EXIT_SUCCESS;
 }
 
-//C:\Users\Alex\Documents\shape_visual\build\bin\Release\itkIncrementalPCAModelEstimatorVisual.exe C:\Users\Alex\Documents\aligned100\aligned.mvb 10 0 100 1 0.03
+//C:\Users\Alex\Documents\shape_visual\build\bin\Release\itkIncrementalPCAModelEstimatorVisual.exe C:\Users\Alex\Documents\aligned100\aligned.mvb 10 20 20 1 0.03 0.9

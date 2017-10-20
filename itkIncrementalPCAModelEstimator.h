@@ -104,6 +104,12 @@ public:
   /** Set batch size. */
   virtual void setPCABatchSize(int batchSize);
 
+  /** Set precision. */
+  virtual void setPrecision(double precision);
+
+  /** Set eigenvalue size. */
+  virtual void seteigenvalueSize(int eigenvalueSize);
+
   /** Set/Get the number of measures in the input. */
   itkSetMacro(NumberOfMeasures, unsigned int);
   itkGetMacro(NumberOfMeasures, unsigned int);
@@ -195,6 +201,8 @@ protected:
   unsigned int  m_NumberOfMeasures;
 
   int m_batchSize;
+  double m_Precision;
+  int m_eigenvalueSize;
 
   /** Local storage variables */
   VectorType    m_Means;

@@ -30,7 +30,6 @@
 
 namespace itk
 {
-
 	template<class TPrecisionType>
 	IncrementalPCAModelEstimator<TPrecisionType>
 		::IncrementalPCAModelEstimator(void) :m_NumberOfTrainingSets(0)
@@ -125,7 +124,19 @@ namespace itk
 	{
 		m_batchSize = batchSize;
 	}
+	template<class TPrecisionType>
+	void
+		IncrementalPCAModelEstimator<TPrecisionType>
+		::setPrecision(double precision)
+	{
+		m_Precision = precision;
+	}
 
+	template<class TPrecisionType>
+	void IncrementalPCAModelEstimator<TPrecisionType>::seteigenvalueSize(int eigenvalueSize)
+	{
+		m_eigenvalueSize = eigenvalueSize;
+	}
 
 	template<class TPrecisionType>
 	void
@@ -346,7 +357,7 @@ namespace itk
 		//-------------------------------------------------------------------------
 		//Calculate the Means
 		//-------------------------------------------------------------------------
-		//std::cout << "IncrementalPCAModelEstimator: Make Mean " << m_NumberOfMeasures << std::endl;
+		//std::cout << "PCAModelEstimator: Make Mean " << m_NumberOfMeasures << std::endl;
 		m_Means.set_size(m_NumberOfMeasures);
 		m_Means.fill(0);
 
@@ -355,8 +366,8 @@ namespace itk
 		  m_Means += m_TrainingSets[i];
 		  }
 		m_Means /= (TPrecisionType)(m_NumberOfTrainingSets);
-		//std::cout << "IncrementalPCAModelEstimator: Mean Performed " << m_Means.size() << " " << m_NumberOfTrainingSets << std::endl;
-		//std::cout << "IncrementalPCAModelEstimator: Make D" << std::endl;
+		//std::cout << "PCAModelEstimator: Mean Performed " << m_Means.size() << " " << m_NumberOfTrainingSets << std::endl;
+		//std::cout << "PCAModelEstimator: Make D" << std::endl;
 		vnl_matrix<TPrecisionType> D;
 		D.set_size(m_NumberOfMeasures, m_NumberOfTrainingSets);
 		D.fill(0);
@@ -365,16 +376,16 @@ namespace itk
 		  {
 		  D.set_column(i, m_TrainingSets[i] - m_Means);
 		  }
-		//std::cout << "IncrementalPCAModelEstimator: D Performed " << D.rows() << " " << D.columns() << std::endl;
+		//std::cout << "PCAModelEstimator: D Performed " << D.rows() << " " << D.columns() << std::endl;
 
 		vnl_matrix<TPrecisionType> T = (D.transpose()*D)/(m_NumberOfTrainingSets-1);
 
-		//std::cout << "IncrementalPCAModelEstimator: T Performed " << T.rows() << " " << T.columns() << std::endl;
+		//std::cout << "PCAModelEstimator: T Performed " << T.rows() << " " << T.columns() << std::endl;
 
 		m_EigenValues.set_size(m_NumberOfTrainingSets);
 		m_EigenVectors.set_size(m_NumberOfTrainingSets,m_NumberOfTrainingSets);
 
-		//std::cout << "IncrementalPCAModelEstimator: Solving Eigensystem" << std::endl;
+		//std::cout << "PCAModelEstimator: Solving Eigensystem" << std::endl;
 
 		vnl_symmetric_eigensystem_compute(T, m_EigenVectors, m_EigenValues);
 
@@ -382,11 +393,11 @@ namespace itk
 		//is ordered in decending order of their corresponding eigen values.
 		m_EigenValues.flip();
 		m_EigenVectors.fliplr();
-		//std::cout << "IncrementalPCAModelEstimator: Eigensystem2" << std::endl;
+		//std::cout << "PCAModelEstimator: Eigensystem2" << std::endl;
 		m_EigenVectors = D*m_EigenVectors;
-		//std::cout << "IncrementalPCAModelEstimator: Eigensystem3" << m_EigenVectors << std::endl;
+		//std::cout << "PCAModelEstimator: Eigensystem3" << m_EigenVectors << std::endl;
 		m_EigenVectors.normalize_columns();
-		//std::cout << "IncrementalPCAModelEstimator: Eigensystem4 " << m_EigenVectors << std::endl;
+		//std::cout << "PCAModelEstimator: Eigensystem4 " << m_EigenVectors << std::endl;
 
 		for(unsigned int i = 0; i < m_EigenValues.size(); i++)
 		  {
@@ -406,38 +417,32 @@ namespace itk
 		//std::cout << m_EigenVectors.rows() << " " << m_EigenVectors.columns() << std::endl;
 		*/
 
-		//-------------------------------------------------------------------------
-		//Calculate the Means
-		//-------------------------------------------------------------------------
-		//std::cout << "PCAModelEstimator" << m_NumberOfMeasures << std::endl;
+		// calculate mean
 		m_Means.set_size(m_NumberOfMeasures);
 		m_Means.fill(0);
-
-		for (unsigned int i = 0; i < m_batchSize; i++)
+		for (int i = 0; i < m_batchSize; i++)
 		{
 			m_Means += m_TrainingSets[i];
 		}
 		m_Means /= (PrecisionType)(m_NumberOfTrainingSets);
-		//std::cout << "PCAModelEstimator: Mean Performed " << m_Means.size() << " " << m_NumberOfTrainingSets << std::endl;
-		//std::cout << "PCAModelEstimator: Make D" << std::endl;
-		vnl_matrix<PrecisionType> D, D_Weighted;
+
+		// construct D
+		MatrixType D, D_Weighted;
 		D.set_size(m_NumberOfMeasures, m_batchSize);
 		D.fill(0);
-
-		// remove mean and make matrix
-		for (unsigned int i = 0; i < m_batchSize; i++)
+		for (int i = 0; i < m_batchSize; i++) // remove mean
 		{
-			const vnl_vector<PrecisionType> tmpSet = m_TrainingSets[i] - m_Means;
+			const VectorType tmpSet = m_TrainingSets[i] - m_Means;
 			D.set_column(i, tmpSet);
 		}
 
 		m_EigenValues.set_size(m_batchSize);
 		m_EigenVectors.set_size(m_NumberOfMeasures, m_batchSize);
-		//std::cout << "PCAModelEstimator: D Performed " << D.rows() << "x" << D.columns() << std::endl;
 
 		ApplyStandardPCA(D, m_EigenVectors, m_EigenValues);
+		// coefficent m_A
 		m_A.set_size(m_batchSize, m_batchSize);
-		for (unsigned int i = 0; i < m_batchSize; i++)
+		for (int i = 0; i < m_batchSize; i++)
 		{
 			m_A.set_column(i, m_EigenVectors.transpose() * D.get_column(i));
 		}
@@ -447,95 +452,46 @@ namespace itk
 		IncrementalPCAModelEstimator<TPrecisionType>
 		::IPCAModelParameters()
 	{
-		/* variables for ipca */
-		MatrixType UT;
-		MatrixType x; // current shape
-		MatrixType mean;
-		MatrixType tmpSet;
-		MatrixType a;
-		MatrixType y;
-		MatrixType r;
-		MatrixType Ud;
-		MatrixType Udd;
-		VectorType lamdadd;
-		MatrixType Ad;
-		MatrixType Anew;
-		MatrixType rn;
-		VectorType udd;
-		MatrixType tmpAd;
 
 		this->EstimatePCAModelParameters();
-		//std::cout << "EsitmatePCAModelParameters() done" << std::endl;
 
 		for (unsigned int i = m_batchSize; i < m_NumberOfTrainingSets; i++)
 		{
+			/* variables for ipca */
+			MatrixType UT, Ud, Udd, Ad;
+			VectorType x, a, y, r, lamdadd, udd;
+
 			// 1. Project new surface from D to current eigenspace, a = UT(x-mean)
 			UT = m_EigenVectors.transpose();
-			x.set_size(m_NumberOfMeasures, 1); // current shape set size 69138 x 1
-			x.fill(0);
-			x.set_column(0, m_TrainingSets[i]); // set first column from training set
-			tmpSet.set_size(m_NumberOfMeasures, 1); // 69138 x 1
-			tmpSet.fill(0);
-			tmpSet.set_column(0, (m_TrainingSets[i] - m_Means)); // remove mean from current shape
-			a.set_size(i, 1); // i x 1
-			a.fill(0);
-			a.set_columns(0, UT * tmpSet); // project to eigenspace
+			x = m_TrainingSets[i]; // new image
+			a = UT * (m_TrainingSets[i] - m_Means);
 
 			// 2. Reconstruct new image, y = U a + mean
-			mean.set_size(m_Means.size(), 1);
-			mean.fill(0);
-			mean.set_column(0, m_Means);
-			y = m_EigenVectors * a + mean; // error
+			y = m_EigenVectors * a + m_Means; // error
 
 			// 3. Compute the residual vector, r is orthogonal to U
 			r = x - y;
 
-			// 4. Append r as a  new basis vector
+			// 4. Append r as a new basis vector
 			Ud.set_size(m_NumberOfMeasures, m_EigenVectors.cols() + 1);
-			Ud.fill(0);
 			Ud.set_columns(0, m_EigenVectors);
-			//rn = r.normalize_columns();
-			// something need to be normalise
-			double r_mag = 0;
-			for (unsigned int j = 0; j < r.size(); j++)
-			{
-				r_mag += (r.get(j, 0)*r.get(j, 0));
-			}
-			r_mag = sqrt(r_mag);
-			Ud.set_columns(Ud.cols() - 1, r);
+			Ud.set_column(Ud.cols() - 1, r/r.two_norm());
 
-			// 5. New coefficients
+			// 5. New coefficients 
 			Ad.set_size(m_A.rows() + 1, m_A.cols() + 1); // i+1 x i+1
 			Ad.fill(0);
-			// add A
-			Ad.update(m_A, 0, 0);
-			// add a
-			Ad.update(a, 0, Ad.cols() - 1);
-			// add ||r||
-			// #1 method: r_mag
-			//double r_mag = 0;
-			//for (unsigned int j = 0; j < r.size(); j++)
-			//{
-			//	r_mag += (r.get(j, 0)*r.get(j, 0));
-			//}
-			//r_mag = sqrt(r_mag);
-			Ad.put(Ad.rows() - 1, Ad.cols() - 1, r_mag);
-			
-			// #2 method: r.array_two_norm()
-			// r.array_two_norm() always 1
-			//Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.array_two_norm());
+			Ad.update(m_A, 0, 0); // add A
+			Ad.set_column(Ad.cols() - 1, a); // add a
+			// r_mag and r.array_two_norm() is the same, r_mag is removed
+			// r.array_two_norm() and r.frobenius() is the same
+			// comparing
+			//std::cout << "r.array_two_norm: " << r.array_two_norm() << std::endl;
+			//std::cout << "r.fro_norm: " << r.fro_norm() << std::endl;
+			//std::cout << "r.rms: " << r.rms() << std::endl;
+			//std::cout << "r.frobenius_norm: " << r.frobenius_norm() << std::endl;
+			Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.two_norm()); // add ||r||
 
-			// #3 method: fro_norm
-			//Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.fro_norm());
-
-			// #4 method: rms
-			//Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.rms());
-
-			// #5 method: frobenius_norm
-			//Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.frobenius_norm());
-
-			// 6. Perform PCA on Ad
-			// udd is mean of Ad, one column, Ad rows
+			// 6. Perform PCA on Ad, obtain udd, Udd, lamdadd
 			udd.set_size(Ad.cols());
 			udd.fill(0);
 			for (unsigned int j = 0; j < Ad.cols(); j++)
@@ -543,23 +499,15 @@ namespace itk
 				udd += Ad.get_column(j);
 			}
 			udd /= (PrecisionType)(Ad.cols());
-			for (unsigned int j = 0; j < Ad.cols(); j++)
-			{
-				const vnl_vector<PrecisionType> tmpSet = Ad.get_column(j) - udd;
-				Ad.set_column(j, tmpSet);
-			}
 			ApplyStandardPCA(Ad, Udd, lamdadd);
 
-			// 7. Project the coefficient vectors to new basis
-			// remove means from all columns of Ad
-			// Ad size: i+1 x i+1 (i start at batchsize)
-			/*tmpAd.set_size(Ad.rows(), Ad.cols());
-			for (unsigned int m = 0; m < i; m++)
+			// 7. Project the coefficient vectors to new basis 
+			for (unsigned int j = 0; j < Ad.cols(); j++) // remove udd(mean of Ad) from Ad
 			{
-			tmpAd.set_column(m, Ad.get_column(m) - udd);
-			}*/
+				const VectorType tmpSet = Ad.get_column(j) - udd;
+				Ad.set_column(j, tmpSet);
+			}
 			m_A = Udd.transpose() * Ad;
-			//std::cout << m_A << std::endl;
 
 			// 8. Rotate the subspace
 			m_EigenVectors = Ud * Udd;
@@ -572,38 +520,35 @@ namespace itk
 
 			// compare with precision
 		}
+		// sum of all eigenvalue
 
 		// trim eigenvectorSize if needed
-		// trim 
+		if (m_EigenValues.size() > m_eigenvalueSize)
+		{
+			m_EigenValues = m_EigenValues.extract(m_eigenvalueSize, 0);
+		}
+
 	}
 	template<class TPrecisionType>
 	void
 		IncrementalPCAModelEstimator<TPrecisionType>
 		::ApplyStandardPCA(const MatrixType &data, MatrixType &eigenVecs, VectorType &eigenVals)
-
 	{
+		// 1/N C C^T
+		// covariance
 		const PrecisionType norm = 1.0 / (data.cols() - 1);
 		const vnl_matrix<PrecisionType> T = (data.transpose()*data)*norm; //D^T.D is smaller so more efficient
-
-																		  //SVD
+		//SVD
 		vnl_svd<PrecisionType> svd(T); //!< Form Projected Covariance matrix and compute SVD, ZZ^T
-		svd.zero_out_absolute(); ///Zero out values below 1e-8 but greater than zero
-
-								 ///pinverse unnecessary?
-								 //  eigenVecs = data*vnl_matrix_inverse<double>(svd.U()).pinverse().transpose(); //!< Extract eigenvectors from U, noting U = V^T since covariance matrix is real and symmetric
+		//svd.zero_out_absolute(); ///Zero out values below 1e-8 but greater than zero
+		///pinverse unnecessary?
+		//  eigenVecs = data*vnl_matrix_inverse<double>(svd.U()).pinverse().transpose(); //!< Extract eigenvectors from U, noting U = V^T since covariance matrix is real and symmetric
 		eigenVecs = data*svd.U(); //!< Extract eigenvectors from U, noting U = V^T since covariance matrix is real and symmetric
 		eigenVecs.normalize_columns();
 		eigenVals = svd.W().diagonal();
+
 	}
 	//-----------------------------------------------------------------
-
-
 } // namespace itk
 
 #endif
-
-/* 100 smilx 100 itk batch 100 itk incremental
-vtk is different because decomposition
-
-smilx generate vectors
-*/

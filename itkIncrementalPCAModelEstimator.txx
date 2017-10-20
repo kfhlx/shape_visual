@@ -480,8 +480,10 @@ namespace itk
 			// 5. New coefficients 
 			Ad.set_size(m_A.rows() + 1, m_A.cols() + 1); // i+1 x i+1
 			Ad.fill(0);
-			Ad.update(m_A, 0, 0); // add A
-			Ad.set_column(Ad.cols() - 1, a); // add a
+			Ad.update(m_A, 0, 0); // add A at top left corner
+			Ad.set_column(Ad.cols() - 1, a); // add a at last column
+			Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.two_norm()); // add ||r|| at bottom right corner
+
 			// r_mag and r.array_two_norm() is the same, r_mag is removed
 			// r.array_two_norm() and r.frobenius() is the same
 			// comparing
@@ -489,7 +491,6 @@ namespace itk
 			//std::cout << "r.fro_norm: " << r.fro_norm() << std::endl;
 			//std::cout << "r.rms: " << r.rms() << std::endl;
 			//std::cout << "r.frobenius_norm: " << r.frobenius_norm() << std::endl;
-			Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.two_norm()); // add ||r||
 
 			// 6. Perform PCA on Ad, obtain udd, Udd, lamdadd
 			udd.set_size(Ad.cols());

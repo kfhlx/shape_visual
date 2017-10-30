@@ -36,7 +36,7 @@ namespace itk
 	{
 		m_EigenVectors.set_size(0, 0);
 		m_EigenValues.set_size(0);
-
+		m_A = 0;
 		m_NumberOfPrincipalComponentsRequired = 1;
 		m_NumberOfMeasures = 0;
 		m_Valid = false;
@@ -389,8 +389,18 @@ namespace itk
 		IncrementalPCAModelEstimator<TPrecisionType>
 		::IPCAModelParameters()
 	{
-
-		this->EstimatePCAModelParameters();
+		if (m_batchSize > 0)
+		{
+			this->EstimatePCAModelParameters();
+		}
+		if (m_batchSize == 0)
+		{
+			m_EigenVectors.set_size(GetNumberOfMeasures(),1);
+			m_EigenVectors.fill(0);
+			m_A = 0;
+			m_Means = m_TrainingSets[0];
+			m_batchSize++;
+		}
 		std::cout << "EstimatePCAModelParameters() done" << std::endl;
 
 		for (unsigned int i = m_batchSize; i < m_NumberOfTrainingSets; i++)
@@ -403,28 +413,26 @@ namespace itk
 			UT = m_EigenVectors.transpose();
 			x = m_TrainingSets[i]; // new image
 			a = UT * (x - m_Means);
-
+			
 			// 2. Reconstruct new image, y = U a + mean
 			y = m_EigenVectors * a + m_Means;
-
+			
 			// 3. Compute the residual vector, r is orthogonal to U
 			r = x - y;
 
 			// 4. Append r as a new basis vector
-			Ud.set_size(m_NumberOfMeasures, m_EigenVectors.cols() + 1);
-			
+			//Ud.set_size(m_NumberOfMeasures, m_EigenVectors.cols() + 1);
+			Ud.set_size(m_NumberOfMeasures, i + 1);
 			Ud.set_columns(0, m_EigenVectors);
-			Ud.set_column(Ud.cols() - 1, r );
 			Ud.set_column(Ud.cols() - 1, r/r.two_norm());
-			//Ud.normalize_columns();
 
 			// 5. New coefficients 
-			Ad.set_size(m_A.rows() + 1, m_A.cols() + 1); // i+1 x i+1
+			Ad.set_size(i + 1, i + 1); // i+1 x i+1
 			Ad.fill(0);
 			Ad.update(m_A, 0, 0); // add A at top left corner
 			Ad.set_column(Ad.cols() - 1, a); // add a at last column
 			Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.two_norm()); // add ||r|| at bottom right corner
-			
+
 			// 6. Perform PCA on Ad, obtain udd, Udd, lamdadd
 			ApplyStandardPCA2(Ad, Udd, lamdadd);
 
@@ -448,11 +456,9 @@ namespace itk
 
 			// 9. Update the mean
 			m_Means = m_Means + Ud * udd;
-			//m_Means = (m_Means * i + x) / (i + 1);
-
+			
 			// 10. New eigenvalues
 			m_EigenValues = lamdadd;
-
 			// compare with precision
 		}
 		// sum of all eigenvalue
@@ -491,7 +497,7 @@ namespace itk
 		const vnl_matrix<PrecisionType> T = (data.transpose()*data)*norm; //D^T.D is smaller so more efficient
 																		  //SVD
 		vnl_svd<PrecisionType> svd(T); //!< Form Projected Covariance matrix and compute SVD, ZZ^T
-		svd.zero_out_absolute(); ///Zero out values below 1e-8 but greater than zero
+		///svd.zero_out_absolute(); ///Zero out values below 1e-8 but greater than zero
 		eigenVecs = svd.U(); //!< Extract eigenvectors from U
 		eigenVecs.normalize_columns();
 		eigenVals = svd.W().diagonal();

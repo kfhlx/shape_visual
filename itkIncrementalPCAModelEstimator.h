@@ -67,7 +67,7 @@ namespace itk
  *
  * \ingroup Algorithms */
 
-template <class TPrecisionType=double >
+template <class TPrecisionType=long double >
 class ITK_EXPORT IncrementalPCAModelEstimator : public Object
 {
 public:

@@ -129,7 +129,17 @@ int main(int argc, char * argv[])
 	ipcaModel->setPCABatchSize(batchSize);
 	ipcaModel->setPrecision(precision);
 	ipcaModel->seteigenvalueSize(eigenvalueSize);
+	std::clock_t start;
+	double duration;
+
+	start = std::clock();
+
 	ipcaModel->Update();
+
+	duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
+
+	std::cout << "printf: " << duration << '\n';
+	
 
 	VectorType eigenValues = ipcaModel->GetEigenValues();
 

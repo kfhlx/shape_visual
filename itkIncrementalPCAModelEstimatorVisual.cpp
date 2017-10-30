@@ -108,8 +108,6 @@ int main(int argc, char * argv[])
 		MeshType::Pointer mesh = polyDataReader->GetOutput();
 		numberOfPoints = mesh->GetNumberOfPoints();
 		unsigned int numberOfCells = mesh->GetNumberOfCells();
-		//std::cout << "numberOfPoints= " << numberOfPoints << std::endl;
-		//std::cout << "numberOfCells= " << numberOfCells << std::endl;
 
 		// Retrieve points
 		VectorType pointsVector(3 * numberOfPoints); //for each x, y, z values
@@ -135,7 +133,9 @@ int main(int argc, char * argv[])
 
 	VectorType eigenValues = ipcaModel->GetEigenValues();
 
-	// write eigenValues to file
+	/**
+	 * write eigenValues to file
+	 */
 	std::ofstream myfile;
 	myfile.open("C:\\Users\\Alex\\Desktop\\eigenvalue.csv");
 	myfile << "Mode,Value,\n";

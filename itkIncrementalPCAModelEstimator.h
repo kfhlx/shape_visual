@@ -209,6 +209,7 @@ protected:
   MatrixType    m_EigenVectors;
   VectorType    m_EigenValues;
   MatrixType	m_A;
+  MatrixType	m_D;
 
   // The number of input training sets for PCA
   unsigned int  m_NumberOfTrainingSets;
@@ -225,6 +226,7 @@ private:
   void EstimatePCAModelParameters();
   void IPCAModelParameters();
   void ApplyStandardPCA(const MatrixType &data, MatrixType &eigenVecs, VectorType &eigenVals);
+  void ApplyStandardPCA2(const MatrixType &data, MatrixType &eigenVecs, VectorType &eigenVals);
 }; // class IncrementalPCAModelEstimator
 
 

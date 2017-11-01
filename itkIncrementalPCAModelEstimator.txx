@@ -2,7 +2,7 @@
   Program: MILX MixView
   Module: itkIncrementalPCAModelEstimator.txx
   Author: Jurgen Fripp
-  Modified by:
+  Modified by: King Fai Ho
   Language: C++
   Created: Fri 09 March 2007 16:21:00 EST
 
@@ -25,6 +25,10 @@
 
 #include <fstream>
 #include <iostream>
+#include <numeric>
+#include <vector>
+#include <iterator>
+#include <functional>
 
 #include <itkImportImageFilter.h>
 
@@ -111,13 +115,10 @@ namespace itk
 		::AddTrainingSet(VectorType trainingSet)
 	{
 		m_TrainingSets.push_back(trainingSet);
-		//std::cout << "m_TrainingSets.size(): " << m_TrainingSets.size() << std::endl;
 		m_NumberOfTrainingSets = m_TrainingSets.size();
-		//std::cout << "trainingSet.size(): " << trainingSet.size() << std::endl;
 		m_NumberOfMeasures = trainingSet.size();
 		this->SetValid(false);
 	}
-
 
 	template<class TPrecisionType>
 	void
@@ -126,6 +127,7 @@ namespace itk
 	{
 		m_batchSize = batchSize;
 	}
+
 	template<class TPrecisionType>
 	void
 		IncrementalPCAModelEstimator<TPrecisionType>
@@ -137,7 +139,7 @@ namespace itk
 	template<class TPrecisionType>
 	void IncrementalPCAModelEstimator<TPrecisionType>::seteigenvalueSize(int eigenvalueSize)
 	{
-		m_eigenvalueSize = eigenvalueSize;
+		m_eigenvalueSizeControl = eigenvalueSize;
 	}
 
 	template<class TPrecisionType>
@@ -187,7 +189,6 @@ namespace itk
 		//std::cout << m_EigenValues
 		this->GetVectorFromDecomposition(decomposition, reconstruction, numberOfModes);
 	}
-
 
 	template<class TPrecisionType>
 	void
@@ -288,7 +289,6 @@ namespace itk
 		}
 	}
 
-
 	template<class TPrecisionType>
 	template<class TPixel, unsigned Dim>
 	itk::SmartPointer< itk::Image<TPixel, Dim> >
@@ -329,7 +329,7 @@ namespace itk
 		::GenerateData()
 	{
 		this->EstimateModels();
-		this->SetValid(true);
+		//this->SetValid(true);
 	}// end Generate data
 
 	/**-----------------------------------------------------------------
@@ -345,8 +345,9 @@ namespace itk
 		this->IPCAModelParameters();
 
 	}// end EstimateShapeModels
+
 	/**-----------------------------------------------------------------
-	 *Estimage shape models using PCA.
+	 *Estimage shape models using PCA and iPCA.
 	 *-----------------------------------------------------------------
 	 */
 	template<class TPrecisionType>
@@ -362,7 +363,7 @@ namespace itk
 			m_Means += m_TrainingSets[i];
 		}
 		m_Means /= (PrecisionType)(m_NumberOfTrainingSets);
-
+		
 		// construct D
 		MatrixType D;
 		D.set_size(m_NumberOfMeasures, m_batchSize);
@@ -375,15 +376,17 @@ namespace itk
 		}
 		m_EigenValues.set_size(m_batchSize);
 		m_EigenVectors.set_size(m_NumberOfMeasures, m_batchSize);
+
 		ApplyStandardPCA(D, m_EigenVectors, m_EigenValues);
+
 		// coefficent m_A
 		m_A.set_size(m_batchSize, m_batchSize);
 		for (int i = 0; i < m_batchSize; i++)
 		{
 			m_A.set_column(i, m_EigenVectors.transpose() * D.get_column(i));
-			//std::cout << "m_A: " << m_A << std::endl;
 		}
 	}// end EstimatePCAModelParameters
+
 	template<class TPrecisionType>
 	void
 		IncrementalPCAModelEstimator<TPrecisionType>
@@ -401,28 +404,27 @@ namespace itk
 			m_Means = m_TrainingSets[0];
 			m_batchSize++;
 		}
-		std::cout << "EstimatePCAModelParameters() done" << std::endl;
 
-		for (unsigned int i = m_batchSize; i < m_NumberOfTrainingSets; i++)
+		/* variables for ipca */
+		MatrixType UT, Ud, Udd, Ad;
+		VectorType x, a, y, r, rn, lamdadd, udd;
+
+		for (unsigned int i = m_batchSize; i < m_NumberOfTrainingSets; ++i)
 		{
-			/* variables for ipca */
-			MatrixType UT, Ud, Udd, Ad;
-			VectorType x, a, y, r, rn, lamdadd, udd;
-
 			// 1. Project new surface from D to current eigenspace, a = UT(x-mean)
 			UT = m_EigenVectors.transpose();
 			x = m_TrainingSets[i]; // new image
 			a = UT * (x - m_Means);
-			
+
 			// 2. Reconstruct new image, y = U a + mean
 			y = m_EigenVectors * a + m_Means;
-			
+
 			// 3. Compute the residual vector, r is orthogonal to U
 			r = x - y;
 
 			// 4. Append r as a new basis vector
-			//Ud.set_size(m_NumberOfMeasures, m_EigenVectors.cols() + 1);
-			Ud.set_size(m_NumberOfMeasures, i + 1);
+			Ud.set_size(m_NumberOfMeasures, m_EigenVectors.cols() + 1);
+			//Ud.set_size(m_NumberOfMeasures, i + 1);
 			Ud.set_columns(0, m_EigenVectors);
 			Ud.set_column(Ud.cols() - 1, r/r.two_norm());
 
@@ -456,20 +458,47 @@ namespace itk
 
 			// 9. Update the mean
 			m_Means = m_Means + Ud * udd;
-			
+
 			// 10. New eigenvalues
 			m_EigenValues = lamdadd;
-			// compare with precision
-		}
-		// sum of all eigenvalue
 
+			// compare with precision after 20
+			//if (m_EigenValues.size() > 20)
+			//{
+			//	int model_index = 0;
+			//	std::vector<double> Evalsum_inc(std::vector<double>::size_type(m_EigenValues.size()));
+			//	std::vector<double> Eval_inc = {};
+
+			//	for (int i = 0; i < m_EigenValues.size(); i++)
+			//	{
+			//		Eval_inc.push_back(m_EigenValues.get(i) / m_EigenValues.sum());
+			//	}
+			//	//for (std::vector<double>::const_iterator p = Eval_inc.begin(); p != Eval_inc.end(); ++p)
+			//	//	std::cout << *p << ' ';
+
+			//	std::partial_sum(Eval_inc.begin(), Eval_inc.end(), Evalsum_inc.begin());
+			//	//for (std::vector<double>::const_iterator p = Evalsum_inc.begin(); p != Evalsum_inc.end(); ++p)
+			//	//	std::cout << *p << ' ';
+			//	//std::cout << std::endl;
+			//	for (int p = 0; p < Evalsum_inc.size(); ++p)
+			//	{
+			//		if (Evalsum_inc[p] > m_Precision)
+			//		{
+			//			std::cout << "bang" << std::endl;
+			//			std::cout << "p: " << p << std::endl;
+			//			p = Evalsum_inc.size();
+			//			model_index = p;
+			//		}
+			//	}
+			//}
+		}
 		// trim eigenvectorSize if needed
-		if (m_EigenValues.size() > m_eigenvalueSize)
+		if (m_EigenValues.size() > m_eigenvalueSizeControl)
 		{
-			m_EigenValues = m_EigenValues.extract(m_eigenvalueSize, 0);
+			m_EigenValues = m_EigenValues.extract(m_eigenvalueSizeControl, 0);
 		}
-
 	}
+
 	template<class TPrecisionType>
 	void
 		IncrementalPCAModelEstimator<TPrecisionType>
@@ -495,7 +524,7 @@ namespace itk
 		// covariance
 		const PrecisionType norm = 1.0 / (data.cols() - 1);
 		const vnl_matrix<PrecisionType> T = (data.transpose()*data)*norm; //D^T.D is smaller so more efficient
-																		  //SVD
+		//SVD
 		vnl_svd<PrecisionType> svd(T); //!< Form Projected Covariance matrix and compute SVD, ZZ^T
 		///svd.zero_out_absolute(); ///Zero out values below 1e-8 but greater than zero
 		eigenVecs = svd.U(); //!< Extract eigenvectors from U

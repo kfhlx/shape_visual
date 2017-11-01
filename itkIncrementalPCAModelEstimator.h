@@ -67,7 +67,7 @@ namespace itk
  *
  * \ingroup Algorithms */
 
-template <class TPrecisionType=long double >
+template <class TPrecisionType=double >
 class ITK_EXPORT IncrementalPCAModelEstimator : public Object
 {
 public:
@@ -202,18 +202,17 @@ protected:
 
   int m_batchSize;
   double m_Precision;
-  int m_eigenvalueSize;
+  int m_eigenvalueSizeControl;
 
   /** Local storage variables */
   VectorType    m_Means;
   MatrixType    m_EigenVectors;
   VectorType    m_EigenValues;
   MatrixType	m_A;
-  MatrixType	m_D;
 
-  // The number of input training sets for PCA
+  /** The number of input training sets for PCA */
   unsigned int  m_NumberOfTrainingSets;
-  // The number of output Pricipal Components
+  /** The number of output Pricipal Components */
   unsigned int  m_NumberOfPrincipalComponentsRequired;
   bool          m_Valid;
 

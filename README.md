@@ -4,7 +4,6 @@ Applying incremental learning on 3D knee surfaces and reconstruction in C++ with
 
 itkIncrementalPCAModelEstimator include batch PCA and incremental PCA.
 Implemented with ITK and VTK
-The initial batch size could be zero, it can be fully incremental.
 Incremental PCA is conducted in a subspace level.
 
 itkIncrementalPCAModelEstimatorVisual is the test file.

@@ -339,7 +339,10 @@ namespace itk
 
 			// 3. Compute the residual vector, r is orthogonal to U
 			r = x - y;
-
+			// use r.two_norm() to determine the update
+			// if ||r||>0.2 useful
+			// else discard
+			
 			// 4. Append r as a new basis vector
 			Ud.set_size(m_NumberOfMeasures, m_EigenVectors.cols() + 1);
 			Ud.set_columns(0, m_EigenVectors);

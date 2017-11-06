@@ -1,8 +1,8 @@
 /*=========================================================================
   Program: MILX MixView
-  Module: itkIncrementalPCAModelEstimator.h
+  Module: itkPCAModelEstimator.h
   Author: Jurgen Fripp
-  Modified by: King Fai Ho
+  Modified by:
   Language: C++
   Created: Fri 09 March 2007 16:21:00 EST
 
@@ -18,17 +18,26 @@
 
   BioMedIA Lab: http://www.ict.csiro.au/BioMedIA/
 =========================================================================*/
-#ifndef __itkIncrementalPCAModelEstimator_h
-#define __itkIncrementalPCAModelEstimator_h
+#ifndef __itkPCAModelEstimator_h
+#define __itkPCAModelEstimator_h
 
-#include "itkPCAModelEstimator.h"
+#include <itkObject.h>
+#include <itkObjectFactory.h>
+#include <itkMacro.h>
+#include <itkImage.h>
 
-#include <fstream>
-#include <iostream>
-#include <numeric>
-#include <vector>
-#include <iterator>
-#include <functional>
+#include <time.h>
+#include <math.h>
+#include <float.h>
+
+#include "vnl/vnl_vector.h"
+#include "vnl/vnl_matrix.h"
+#include "vnl/vnl_math.h"
+#include "vnl/algo/vnl_matrix_inverse.h"
+
+//#include "itkConceptChecking.h"
+#include <vnl/algo/vnl_generalized_eigensystem.h>
+#include <vnl/algo/vnl_symmetric_eigensystem.h>
 
 namespace itk
 {
@@ -36,36 +45,43 @@ namespace itk
 /** \class PCAModelEstimator
  * \brief Base class for PCAModelEstimator object
  *
- * Perform user-defined batch size PCA and pass on the eigenmodel to perform Incremental PCA
+ * itkPCAModelEstimator performs principal component analysis
+ * (PCA) on a set of vectors. The user specifies the number of training vectors
+ * and also the number of desired largest principal components needed.
+ *
+ * The algorithm uses the VNL library to perform the eigen analysis. To speed
+ * the computation of the instead of performing the eigen analysis of the
+ * covariance vector A*A' where A is a matrix with p x t, p = number of
+ * pixels or voxels in each images and t = number of training images, we
+ * calculate the eigen vectors of the inner product matrix A'*A. The resulting
+ * eigen vectors (E) are then multiplied with the the matrix A to get the
+ * principal components. The covariance matrix has a dimension of p x p. Since
+ * number of pixels in any image being typically very high the eigen
+ * decomposition becomes computationally expensive. The inner product on the
+ * other hand has the dimension of t x t, where t is typically much smaller
+ * that p. Hence the eigen decomposition (most compute intensive part) is an
+ * orders of magnitude faster.
  *
  * The Update() function enables the calculation of the various models, creates
  * the membership function objects and populates them.
  *
- * \ingroup Algorithms 
- 
- This work is implemented from:
- Skocaj, D.; Leonardis, A. Incremental and robust learning of subspace representations., 2008, 26, 27-38
- 
- */
-
-
+ * \ingroup Algorithms */
 
 template <class TPrecisionType=double >
-class ITK_EXPORT IncrementalPCAModelEstimator : public PCAModelEstimator<TPrecisionType>
+class ITK_EXPORT PCAModelEstimator : public Object
 {
 public:
   /** Standard class typedefs. */
-  typedef IncrementalPCAModelEstimator			Self;
-  typedef PCAModelEstimator<TPrecisionType>		Superclass;
-  typedef SmartPointer<Self>					Pointer;
-  typedef SmartPointer<const Self>				ConstPointer;
-
+  typedef PCAModelEstimator        Self;
+  typedef Object                   Superclass;
+  typedef SmartPointer<Self>       Pointer;
+  typedef SmartPointer<const Self> ConstPointer;
 
   /** Method for creation through the object factory. */
   itkNewMacro(Self);
 
   /** Run-time type information (and related methods). */
-  itkTypeMacro(IncrementalPCAModelEstimator, Object);
+  itkTypeMacro(PCAModelEstimator, Object);
 
   /** Type definition for matrix. */
   typedef vnl_matrix<TPrecisionType> MatrixType;
@@ -76,24 +92,13 @@ public:
   /** Set/Get the number of required largest principal components. The filter produces
    the required number of principal components plus one outputs. Output index 0 represents
    the mean image and the remaining outputs the requested principal components.*/
-  //virtual void SetNumberOfPrincipalComponentsRequired( unsigned int n );
+  virtual void SetNumberOfPrincipalComponentsRequired( unsigned int n );
   itkGetMacro( NumberOfPrincipalComponentsRequired, unsigned int );
 
-  /** Add a training set. */
+  /** Add/Get a training set. */
   virtual void AddTrainingSet(VectorType trainingSet);
-  /** Get a training set. */
   virtual void GetTrainingSet(int index, vnl_vector<TPrecisionType> &vector);
-  /** Clear a training set. */
   virtual void ClearTrainingSets();
-
-  /** Set batch size. */
-  virtual void setPCABatchSize(int batchSize);
-
-  /** Set precision. */
-  virtual void setPrecision(double precision);
-
-  /** Set eigenvalue control size. */
-  virtual void setEigenvalueSizeControl(int eigenvalueSizeControl);
 
   /** Set/Get the number of measures in the input. */
   itkSetMacro(NumberOfMeasures, unsigned int);
@@ -137,7 +142,7 @@ public:
    */
   int GetNumberOfModesRequired(float threshold)
     {
-    //this->Update();
+    this->Update();
     float sumEig = threshold*m_EigenValues.sum();
     float value = 0;
     for(unsigned int i = 0; i < m_EigenValues.size()-1; i++)
@@ -167,8 +172,8 @@ public:
   itk::SmartPointer< itk::Image<TPixel, Dim> > VectorToImage(VectorType &vec, typename itk::Image<TPixel, Dim>::SizeType size, itk::SmartPointer< itk::Image<TPixel, Dim> > image);
 
 protected:
-  IncrementalPCAModelEstimator();
-  ~IncrementalPCAModelEstimator();
+  PCAModelEstimator();
+  ~PCAModelEstimator();
   virtual void PrintSelf(std::ostream& os, Indent indent) const;
 
   /** Starts the modelling process */
@@ -185,45 +190,32 @@ protected:
 
   unsigned int  m_NumberOfMeasures;
 
-  int m_batchSize;
-  double m_Precision;
-  int m_eigenvalueSizeControl;
-
   /** Local storage variables */
   VectorType    m_Means;
   MatrixType    m_EigenVectors;
   VectorType    m_EigenValues;
-  MatrixType	m_A;
 
-  /** The number of input training sets for PCA */
+  // The number of input training sets for PCA
   unsigned int  m_NumberOfTrainingSets;
-  /** The number of output Pricipal Components */
+  // The number of output Pricipal Components
   unsigned int  m_NumberOfPrincipalComponentsRequired;
   bool          m_Valid;
 
 private:
-  IncrementalPCAModelEstimator(const Self&); //purposely not implemented
+  PCAModelEstimator(const Self&); //purposely not implemented
   void operator=(const Self&); //purposely not implemented
 
   /** Local functions */
   virtual void EstimateModels();
-  /** Batch PCA functions */
   void EstimatePCAModelParameters();
-  /** IPCA functions */
-  void IPCAModelParameters();
-  /** PCA functions for Batch */
-  void ApplyStandardPCA(const MatrixType &data, MatrixType &eigenVecs, VectorType &eigenVals);
-  /** PCA functions for IPCA */
-  void ApplyStandardPCA2(const MatrixType &data, MatrixType &eigenVecs, VectorType &eigenVals);
 
-  TPrecisionType Reconstruct(MatrixType &recon, const MatrixType &data, const MatrixType &eigenVecs, const MatrixType &coefficients, const MatrixType &means);
-}; // class IncrementalPCAModelEstimator
+}; // class PCAModelEstimator
 
 
 } // namespace itk
 
 #ifndef ITK_MANUAL_INSTANTIATION
-#include "itkIncrementalPCAModelEstimator.txx"
+#include "itkPCAModelEstimator.txx"
 #endif
 
 #endif

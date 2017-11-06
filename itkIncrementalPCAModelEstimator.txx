@@ -23,15 +23,6 @@
 
 #include "itkIncrementalPCAModelEstimator.h"
 
-#include <fstream>
-#include <iostream>
-#include <numeric>
-#include <vector>
-#include <iterator>
-#include <functional>
-
-#include <itkImportImageFilter.h>
-
 namespace itk
 {
 	template<class TPrecisionType>
@@ -61,43 +52,7 @@ namespace itk
 		IncrementalPCAModelEstimator<TPrecisionType>
 		::PrintSelf(std::ostream& os, Indent indent) const
 	{
-
-		os << indent << "                   " << std::endl;
-		os << indent << "Models " << std::endl;
-		os << indent << "Results printed in the superclass " << std::endl;
-		os << indent << "                   " << std::endl;
-
 		Superclass::PrintSelf(os, indent);
-
-		itkDebugMacro(<< "                                    ");
-		itkDebugMacro(<< "Results of the model algorithms");
-		itkDebugMacro(<< "====================================");
-
-		itkDebugMacro(<< "The eigen values new method are: ");
-
-		itkDebugMacro(<< m_EigenValues);
-
-		itkDebugMacro(<< " ");
-		itkDebugMacro(<< "==================   ");
-
-		itkDebugMacro(<< "The eigen vectors new method are: ");
-
-
-		for (unsigned int i = 0; i < m_EigenValues.size(); i++)
-		{
-			itkDebugMacro(<< m_EigenVectors.get_row(i));
-		}
-
-		itkDebugMacro(<< " ");
-		itkDebugMacro(<< "+++++++++++++++++++++++++");
-
-		// Print out ivars
-		os << indent << "NumberOfPrincipalComponentsRequired: ";
-		os << m_NumberOfPrincipalComponentsRequired << std::endl;
-		os << indent << "NumberOfTrainingSets: ";
-		os << m_NumberOfTrainingSets << std::endl;
-
-
 	}// end PrintSelf
 
 	template<class TPrecisionType>
@@ -137,9 +92,9 @@ namespace itk
 	}
 
 	template<class TPrecisionType>
-	void IncrementalPCAModelEstimator<TPrecisionType>::seteigenvalueSize(int eigenvalueSize)
+	void IncrementalPCAModelEstimator<TPrecisionType>::setEigenvalueSizeControl(int eigenvalueSizeControl)
 	{
-		m_eigenvalueSizeControl = eigenvalueSize;
+		m_eigenvalueSizeControl = eigenvalueSizeControl;
 	}
 
 	template<class TPrecisionType>
@@ -163,17 +118,12 @@ namespace itk
 		// TODO: Add documentation -> Allows input to be cleared without re-updating built model.
 		//this->SetValid(false);
 	}
-
 	template<class TPrecisionType>
 	void
 		IncrementalPCAModelEstimator<TPrecisionType>
-		::GetDecomposition(vnl_vector<TPrecisionType> vector, vnl_vector<TPrecisionType> &decomposition)
+		::GetDecomposition(VectorType vector, VectorType &decomposition)
 	{
-		this->Update();
-		MatrixType modes = this->GetEigenVectors();
-		VectorType means = this->GetMeans();
-
-		decomposition = modes.transpose()*(vector - means);
+		Superclass::GetDecomposition(vector, decomposition);
 	}
 
 	template<class TPrecisionType>
@@ -195,7 +145,7 @@ namespace itk
 		IncrementalPCAModelEstimator<TPrecisionType>
 		::GetVectorFromDecomposition(vnl_vector<TPrecisionType> decomposition, vnl_vector<TPrecisionType> &reconstruction, int numberOfModes)
 	{
-		this->Update();
+		//this->Update();
 		if (numberOfModes < 0)
 		{
 			numberOfModes = decomposition.size();//this->GetNumberOfPrincipalComponentsRequired();
@@ -275,52 +225,6 @@ namespace itk
 	}
 
 	/**
-	 * Set the number of required principal components
-	 */
-	template<class TPrecisionType>
-	void
-		IncrementalPCAModelEstimator<TPrecisionType>
-		::SetNumberOfPrincipalComponentsRequired(unsigned int n)
-	{
-		if (m_NumberOfPrincipalComponentsRequired != n)
-		{
-			m_NumberOfPrincipalComponentsRequired = n;
-			this->SetValid(false);
-		}
-	}
-
-	template<class TPrecisionType>
-	template<class TPixel, unsigned Dim>
-	itk::SmartPointer< itk::Image<TPixel, Dim> >
-		IncrementalPCAModelEstimator<TPrecisionType>
-		::VectorToImage(VectorType &vec, typename itk::Image<TPixel, Dim>::SizeType size, itk::SmartPointer< itk::Image<TPixel, Dim> > image)
-	{
-		///Convert back to image
-		typedef itk::ImportImageFilter<TPixel, Dim> ImportFilterType;
-		typename ImportFilterType::Pointer importFilter = ImportFilterType::New();
-
-		typename ImportFilterType::IndexType start;
-		start.Fill(0);
-
-		typename ImportFilterType::RegionType region;
-		region.SetIndex(start);
-		region.SetSize(size);
-
-		importFilter->SetRegion(region);
-		if (image)
-		{
-			importFilter->SetOrigin(image->GetOrigin());
-			importFilter->SetSpacing(image->GetSpacing());
-		}
-
-		const bool importImageFilterWillOwnTheBuffer = false;
-		importFilter->SetImportPointer(vec.data_block(), vec.size(), importImageFilterWillOwnTheBuffer);
-		importFilter->Update();
-
-		return importFilter->GetOutput();
-	}
-
-	/**
 	 * Generate data (start the model building process)
 	 */
 	template<class TPrecisionType>
@@ -363,13 +267,13 @@ namespace itk
 			m_Means += m_TrainingSets[i];
 		}
 		m_Means /= (PrecisionType)(m_NumberOfTrainingSets);
-		
+
 		// construct D
 		MatrixType D;
 		D.set_size(m_NumberOfMeasures, m_batchSize);
 		D.fill(0);
 		// remove mean
-		for (int i = 0; i < m_batchSize; i++) 
+		for (int i = 0; i < m_batchSize; i++)
 		{
 			const VectorType tmpSet = m_TrainingSets[i] - m_Means;
 			D.set_column(i, tmpSet);
@@ -379,12 +283,18 @@ namespace itk
 
 		ApplyStandardPCA(D, m_EigenVectors, m_EigenValues);
 
-		// coefficent m_A
+		// coefficient m_A
 		m_A.set_size(m_batchSize, m_batchSize);
 		for (int i = 0; i < m_batchSize; i++)
 		{
 			m_A.set_column(i, m_EigenVectors.transpose() * D.get_column(i));
 		}
+		//	GetTrainingMatrix(m_D);
+		//	const VectorType onesCol(this->m_NumberOfTrainingSets, 1.0);
+		//	const MatrixType MeansMatrix = outer_product(this->m_Means, onesCol);
+		//	TPrecisionType error = Reconstruct(recon, m_D, m_EigenVectors, m_A, MeansMatrix);
+
+
 	}// end EstimatePCAModelParameters
 
 	template<class TPrecisionType>
@@ -392,24 +302,32 @@ namespace itk
 		IncrementalPCAModelEstimator<TPrecisionType>
 		::IPCAModelParameters()
 	{
-		if (m_batchSize > 0)
-		{
-			this->EstimatePCAModelParameters();
-		}
-		if (m_batchSize == 0)
-		{
-			m_EigenVectors.set_size(GetNumberOfMeasures(),1);
-			m_EigenVectors.fill(0);
-			m_A = 0;
-			m_Means = m_TrainingSets[0];
-			m_batchSize++;
-		}
+		this->EstimatePCAModelParameters();
+		cout << "EstimatePCAModelParameters() done" << endl;
 
 		/* variables for ipca */
-		MatrixType UT, Ud, Udd, Ad;
-		VectorType x, a, y, r, rn, lamdadd, udd;
+		MatrixType UT, Ud, Udd, Ad, oldEVec, m_D, recon;
+		VectorType x, a, y, r, rn, lamdadd, udd, dummy;
+		bool startTrim = false;
+		bool trimtrigger = false;
 
-		for (unsigned int i = m_batchSize; i < m_NumberOfTrainingSets; ++i)
+		/*GetTrainingMatrix(m_D);
+		const VectorType onesCol(this->m_NumberOfTrainingSets, 1.0);
+		const MatrixType MeansMatrix = outer_product(this->m_Means, onesCol);
+		TPrecisionType error = Reconstruct(recon, m_D, m_EigenVectors, m_A, MeansMatrix);*/
+		//if (m_batchSize == 0) // complete incremental, start with IPCA
+		//{
+		//	cout << "full incremental" << endl;
+		//	m_EigenVectors.set_size(GetNumberOfMeasures(), 1);
+		//	m_EigenVectors.fill(0);
+		//	m_A = 0;
+		//	m_Means = m_TrainingSets[0];
+		//	m_batchSize++;
+		//}
+
+
+		
+		for (unsigned int i = m_batchSize; i < m_NumberOfTrainingSets; i++)
 		{
 			// 1. Project new surface from D to current eigenspace, a = UT(x-mean)
 			UT = m_EigenVectors.transpose();
@@ -424,19 +342,24 @@ namespace itk
 
 			// 4. Append r as a new basis vector
 			Ud.set_size(m_NumberOfMeasures, m_EigenVectors.cols() + 1);
-			//Ud.set_size(m_NumberOfMeasures, i + 1);
 			Ud.set_columns(0, m_EigenVectors);
-			Ud.set_column(Ud.cols() - 1, r/r.two_norm());
+			Ud.set_column(Ud.cols() - 1, r / r.two_norm());
 
 			// 5. New coefficients 
-			Ad.set_size(i + 1, i + 1); // i+1 x i+1
+			Ad.set_size(m_A.rows() + 1, m_A.rows() + 1); // i+1 x i+1
 			Ad.fill(0);
 			Ad.update(m_A, 0, 0); // add A at top left corner
 			Ad.set_column(Ad.cols() - 1, a); // add a at last column
 			Ad.put(Ad.rows() - 1, Ad.cols() - 1, r.two_norm()); // add ||r|| at bottom right corner
+			//cout << "r.two_norm(): " << r.two_norm() << endl;
 
 			// 6. Perform PCA on Ad, obtain udd, Udd, lamdadd
 			ApplyStandardPCA2(Ad, Udd, lamdadd);
+			// trim trigger
+			if (trimtrigger)
+			{
+
+			}
 
 			// 7. Project the coefficient vectors to new basis 
 			udd.set_size(Ad.cols());
@@ -462,41 +385,71 @@ namespace itk
 			// 10. New eigenvalues
 			m_EigenValues = lamdadd;
 
-			// compare with precision after 20
+			if (m_EigenValues.size() > 20)
+			{
+				trimtrigger = true;
+			}
+			cout << i << "/" << m_NumberOfTrainingSets << "\r" ;
+
+			// reduce model size
 			//if (m_EigenValues.size() > 20)
 			//{
-			//	int model_index = 0;
-			//	std::vector<double> Evalsum_inc(std::vector<double>::size_type(m_EigenValues.size()));
-			//	std::vector<double> Eval_inc = {};
-
-			//	for (int i = 0; i < m_EigenValues.size(); i++)
-			//	{
-			//		Eval_inc.push_back(m_EigenValues.get(i) / m_EigenValues.sum());
-			//	}
-			//	//for (std::vector<double>::const_iterator p = Eval_inc.begin(); p != Eval_inc.end(); ++p)
-			//	//	std::cout << *p << ' ';
-
-			//	std::partial_sum(Eval_inc.begin(), Eval_inc.end(), Evalsum_inc.begin());
-			//	//for (std::vector<double>::const_iterator p = Evalsum_inc.begin(); p != Evalsum_inc.end(); ++p)
-			//	//	std::cout << *p << ' ';
-			//	//std::cout << std::endl;
-			//	for (int p = 0; p < Evalsum_inc.size(); ++p)
-			//	{
-			//		if (Evalsum_inc[p] > m_Precision)
-			//		{
-			//			std::cout << "bang" << std::endl;
-			//			std::cout << "p: " << p << std::endl;
-			//			p = Evalsum_inc.size();
-			//			model_index = p;
-			//		}
-			//	}
+			//	startTrim = true;
 			//}
-		}
-		// trim eigenvectorSize if needed
-		if (m_EigenValues.size() > m_eigenvalueSizeControl)
+			//if (startTrim == true)
+			//{
+			//	cout << "start trim" << endl;
+			//	int model_index = GetNumberOfModesRequired(m_Precision);
+			//	//std::cout << "model_index: " << model_index << std::endl;
+			//	// discard size of eigenvector and eigenvalue after the model index
+			//	// eigenvector
+			//	MatrixType tmpEvec;
+			//	tmpEvec.set_size(m_NumberOfMeasures, model_index);
+			//	tmpEvec = m_EigenVectors.extract(m_NumberOfMeasures, model_index, 0, 0); //??
+			//	oldEVec = m_EigenVectors;
+			//	m_EigenVectors = tmpEvec;
+			//	//std::cout << "m_EigenVectors: " << m_EigenVectors.rows() << " " << m_EigenVectors.cols() << std::endl;
+			//	// eigenvalue
+			//	VectorType tmpEval;
+			//	tmpEval.set_size(model_index);
+			//	tmpEval = m_EigenValues.extract(model_index, 0);
+			//	m_EigenValues = tmpEval;
+			//	//std::cout << "m_EigenValues: " << m_EigenValues.size() << std::endl;
+			//	// m_A
+			//	// trimming the coefficient
+			//	// need to fix
+			//	// #1
+			//	VectorType dummy;
+			//	MatrixType recon = oldEVec*m_A;
+			//	ApplyStandardPCA(recon, oldEVec, dummy);
+			//	m_A.set_size(model_index, model_index);
+			//	for (int j = 0; j < model_index; j++)
+			//	{
+			//		m_A.set_column(j, oldEVec.transpose() * recon.get_column(j));
+			//	}
+			//	// #2
+			//	startTrim = false;
+			//}	
+		}// ipca for loop end
+		//startTrim = false;
+
+		if (m_batchSize != m_NumberOfTrainingSets) // reconstruction
 		{
-			m_EigenValues = m_EigenValues.extract(m_eigenvalueSizeControl, 0);
+			GetTrainingMatrix(m_D);
+			const VectorType onesCol(this->m_NumberOfTrainingSets, 1.0);
+			const MatrixType MeansMatrix = outer_product(this->m_Means, onesCol);
+			TPrecisionType error = Reconstruct(recon, m_D, m_EigenVectors, m_A, MeansMatrix);
+			VectorType dummy;
+			oldEVec = m_EigenVectors;
+			MatrixType recon2 = oldEVec*m_A;
+			ApplyStandardPCA(recon2, m_EigenVectors, dummy); // revert the m_eigenvector for vtk recon visual
 		}
+		
+		//// trim eigenvectorSize if needed
+		//if (m_EigenValues.size() > m_eigenvalueSizeControl)
+		//{
+		//	m_EigenValues = m_EigenValues.extract(m_eigenvalueSizeControl, 0);
+		//}
 	}
 
 	template<class TPrecisionType>
@@ -527,9 +480,28 @@ namespace itk
 		//SVD
 		vnl_svd<PrecisionType> svd(T); //!< Form Projected Covariance matrix and compute SVD, ZZ^T
 		///svd.zero_out_absolute(); ///Zero out values below 1e-8 but greater than zero
-		eigenVecs = svd.U(); //!< Extract eigenvectors from U
+		eigenVecs = svd.U();
 		eigenVecs.normalize_columns();
 		eigenVals = svd.W().diagonal();
+	}
+	template<class TPrecisionType>
+	TPrecisionType
+		IncrementalPCAModelEstimator<TPrecisionType>
+		::Reconstruct(MatrixType &recon, const MatrixType &data, const MatrixType &eigenVecs, const MatrixType &coefficients, const MatrixType &means)
+	{
+		int numberOfModes = this->GetNumberOfModesRequired(m_Precision);
+		std::cerr << "Modes in Reconstruction: " << numberOfModes << std::endl;
+		MatrixType truncatedVecs(this->m_NumberOfMeasures, this->m_NumberOfTrainingSets, 0.0);
+		for (int j = 0; j < numberOfModes; j++)
+			truncatedVecs.set_column(j, eigenVecs.get_column(j));
+		recon = truncatedVecs*coefficients + means; ///Reconstruct all shapes
+													//  recon = eigenVecs*coefficients + means; ///Reconstruct all shapes
+													///Compute difference of steps for convergence testing
+		const MatrixType Error = data - recon; ///Reconstruction error
+		TPrecisionType error = Error.rms();
+		std::cerr << "Reconstruction MSE of " << error << std::endl;
+
+		return error;
 	}
 	//-----------------------------------------------------------------
 } // namespace itk

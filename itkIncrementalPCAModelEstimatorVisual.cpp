@@ -132,31 +132,35 @@ int main(int argc, char * argv[])
 	{
 		int batchSize;
 		double precision;
-		int eigenvalueSizeControl;
-		double weight;
+		//int eigenvalueSizeControl;
 		int mode;
+		double weight;
 
-		std::cout << "input batchSize, precision, eigenvalueSizeControl, mode, weight: " << std::endl;
-		std::cin >> batchSize >> precision >> eigenvalueSizeControl >> mode >> weight;
+		std::cout << "input batchSize, precision, mode, weight: " << std::endl;
+		std::cin >> batchSize;
+		std::cin >> precision;
+		std::cin >> mode;
+		std::cin >> weight;
 		std::cout << "batchSize: " << batchSize << std::endl;
 		std::cout << "precision: " << precision << std::endl;
-		std::cout << "eigenvalueSizeControl: " << eigenvalueSizeControl << std::endl;
 		std::cout << "mode: " << mode << std::endl;
 		std::cout << "weight: " << weight << std::endl;
 
 		ipcaModel->setPCABatchSize(batchSize);
 		ipcaModel->setPrecision(precision);
-		ipcaModel->seteigenvalueSize(eigenvalueSizeControl);
+		//ipcaModel->setEigenvalueSizeControl(eigenvalueSizeControl);
 
-		//Timing
+		// Timing
+		//---------------------------------------------------
 		std::clock_t start;
 		double duration;
 		start = std::clock();
-
+		
 		ipcaModel->Update();
 
 		duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
 		std::cout << "time: " << duration << '\n';
+		//---------------------------------------------------
 
 		VectorType eigenValues = ipcaModel->GetEigenValues();
 		unsigned int numEigVal = eigenValues.size();
@@ -177,9 +181,7 @@ int main(int argc, char * argv[])
 			myfile << i + 1 << "," << eigenValues.get(i) << "\n";
 		}
 		myfile.close();
-
-
-
+		
 		/**
 		* visualisation
 		*/
@@ -189,18 +191,6 @@ int main(int argc, char * argv[])
 		VectorType b(mode, 0);
 		b(mode - 1) = weight; //!< View mode
 		cout << "Generating display for mode " << mode << ", weight " << weight << endl;
-		VectorType recon;
-		ipcaModel->GetVectorFromDecomposition(b, recon);
-		std::cout << "recon: " << recon.size() << std::endl;
-
-		std::ofstream myfile2;
-		myfile2.open("C:\\Users\\Alex\\Desktop\\recon.csv");
-		myfile2 << "recon,\n";
-		for (int i = 0; i < recon.size(); i++)
-		{
-			myfile2 << i + 1 << "," << recon.get(i) << "\n";
-		}
-		myfile2.close();
 
 		////RMSE
 		//float rmse = 0.0;
@@ -212,8 +202,27 @@ int main(int argc, char * argv[])
 		//rmse /= leftOutImageVector.size();
 		//std::cerr << "RMSE: " << sqrt(rmse) << std::endl;
 
+		VectorType recon;
+		//cout << "b: " << b << endl;
+		ipcaModel->GetVectorFromDecomposition(b, recon);
+		//std::ofstream myfile2;
+		//myfile2.open("C:\\Users\\Alex\\Desktop\\recon.csv");
+		//myfile2 << "recon,\n";
+		//for (int i = 0; i < recon.size(); i++)
+		//{
+		//	myfile2 << i + 1 << "," << recon.get(i) << "\n";
+		//}
+		//myfile2.close();
+		for (int i = 0; i < numberOfPoints; i++)
+		{
+			PrecisionType x = recon(i * 3);
+			PrecisionType y = recon((i * 3) + 1);
+			PrecisionType z = recon((i * 3) + 2);
+			points->InsertNextPoint(x, y, z);
+		}
+
 		VectorType means;
-		means = ipcaModel->GetMeans(); // repeat the 
+		means = ipcaModel->GetMeans(); // repeat with mean
 		for (int i = 0; i < numberOfPoints; i++)
 		{
 			PrecisionType x = means(i * 3);
@@ -223,28 +232,19 @@ int main(int argc, char * argv[])
 		}
 
 		// from vector to polydata
-
-		for (int i = 0; i < numberOfPoints; i++)
-		{
-			PrecisionType x = recon(i * 3);
-			PrecisionType y = recon((i * 3) + 1);
-			PrecisionType z = recon((i * 3) + 2);
-			points->InsertNextPoint(x, y, z);
-		}
-
 		vtkSmartPointer<vtkPolyDataReader> reader = vtkSmartPointer<vtkPolyDataReader>::New();
 		reader->SetFileName(filenames[0].c_str());
 		reader->Update();
-
-		vtkSmartPointer<vtkPolyData> meanpolyData = reader->GetOutput();
-		meanpolyData->SetPoints(meanpoints);
-		vtkSmartPointer<vtkPolyData> meanShape = vtkSmartPointer<vtkPolyData>::New();
-		meanShape->DeepCopy(meanpolyData); //use GetVectorFromDecomposition()
 
 		vtkSmartPointer<vtkPolyData> polyData = reader->GetOutput();
 		polyData->SetPoints(points);
 		vtkSmartPointer<vtkPolyData> varShape = vtkSmartPointer<vtkPolyData>::New();
 		varShape->DeepCopy(polyData); //use GetVectorFromDecomposition()
+
+		vtkSmartPointer<vtkPolyData> meanpolyData = reader->GetOutput();
+		meanpolyData->SetPoints(meanpoints);
+		vtkSmartPointer<vtkPolyData> meanShape = vtkSmartPointer<vtkPolyData>::New();
+		meanShape->DeepCopy(meanpolyData); //use GetVectorFromDecomposition()
 
 		vtkSmartPointer<vtkFloatArray> varScalars = vtkSmartPointer<vtkFloatArray>::New();
 		varScalars->SetName("Variation");
@@ -266,7 +266,7 @@ int main(int argc, char * argv[])
 			double var;
 			var = xVal*xVal + yVal*yVal + zVal*zVal;
 
-			// std::cout << var << std::endl;
+			//std::cout << var << std::endl;
 			varVectors->InsertNextTuple3(xVal, yVal, zVal);
 			varShapeVectors->InsertNextTuple3(-xVal, -yVal, -zVal);
 			varScalars->InsertNextValue(var);
@@ -285,18 +285,18 @@ int main(int argc, char * argv[])
 			varScalars->SetValue(i, var / maxScalar);
 		}
 		// save to file
-		// try vtk 6/7
 		meanShape->GetPointData()->SetVectors(varVectors);
 		varShape->GetPointData()->SetVectors(varShapeVectors);
 		meanShape->GetPointData()->SetScalars(varScalars);
 		// Write the file
 		vtkSmartPointer<vtkXMLPolyDataWriter> writer = vtkSmartPointer<vtkXMLPolyDataWriter>::New();
-		writer->SetFileName("C:\\Users\\Alex\\Desktop\\meanShape.vtp");
-		writer->SetInputData(meanShape);
+		writer->SetFileName("C:\\Users\\Alex\\Desktop\\varShape.vtp");
+		writer->SetInputData(varShape);
 		writer->Write();
+
 		vtkSmartPointer<vtkXMLPolyDataWriter> writer2 = vtkSmartPointer<vtkXMLPolyDataWriter>::New();
-		writer2->SetFileName("C:\\Users\\Alex\\Desktop\\varShape.vtp");
-		writer2->SetInputData(varShape);
+		writer2->SetFileName("C:\\Users\\Alex\\Desktop\\meanShape.vtp");
+		writer2->SetInputData(meanShape);
 		writer2->Write();
 
 		std::cout << "file write complete." << std::endl;
@@ -308,8 +308,6 @@ int main(int argc, char * argv[])
 		if (flag == 'N')
 			theEnd = true;
 	}
-	//Add to PCA model
-	
 }
 
 bool ReadSurfaceFileNames(const char * filename, std::vector<int> &ids, std::vector<std::string> &filenames)

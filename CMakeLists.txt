@@ -62,6 +62,8 @@ set(SMILI_FIND_MESSAGE TRUE) #dont keep printing message
 include_directories (${LIBRARY_INCLUDE_PATH} ${ZLIB_INCLUDES})
 # Add link directories needed to use ITK.
 link_directories(${ITK_LIBRARY_DIRS} ${VTK_LIBRARY_DIRS})
+ADD_EXECUTABLE(itkPCAModelEstimator itkPCAModelEstimator.txx)
+TARGET_LINK_LIBRARIES(itkPCAModelEstimator ${ITK_LIBRARIES} ${VTK_LIBRARIES} ${ZLIB_LIBRARIES})
 
 ADD_EXECUTABLE(itkIncrementalPCAModelEstimator itkIncrementalPCAModelEstimator.txx)
 TARGET_LINK_LIBRARIES(itkIncrementalPCAModelEstimator ${ITK_LIBRARIES} ${VTK_LIBRARIES} ${ZLIB_LIBRARIES})
